@@ -81,6 +81,27 @@ impl zed::Extension for DartExtension {
             })
             .unwrap_or_default();
 
+        let tool_args = user_config
+            .get("toolArgs")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str())
+                    .map(|s| s.to_string())
+                    .collect::<Vec<String>>()
+            })
+            .unwrap_or_default();
+
+        let env = user_config
+            .get("env")
+            .and_then(|v| v.as_object())
+            .map(|obj| {
+                obj.iter()
+                    .filter_map(|(k, v)| v.as_str().map(|v| (k.clone(), v.to_string())))
+                    .collect::<Vec<(String, String)>>()
+            })
+            .unwrap_or_default();
+
         let use_fvm = user_config
             .get("useFvm")
             .and_then(|v| v.as_bool())
@@ -92,6 +113,31 @@ impl zed::Extension for DartExtension {
             .and_then(|v| v.as_str())
             .filter(|s| !s.trim().is_empty()) // Filter out empty strings
             .ok_or_else(|| "type is required and cannot be empty or null".to_string())?;
+
+        let flutter_mode = user_config
+            .get("flutterMode")
+            .and_then(|v| v.as_str())
+            .unwrap_or("debug");
+
+        let evaluate_getters = user_config
+            .get("evaluateGettersInDebugViews")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
+
+        let enable_test_runner = user_config
+            .get("enableTestRunner")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+
+        let hot_reload_on_save = user_config
+            .get("hotReloadOnSave")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(true);
+
+        let hot_restart_on_save = user_config
+            .get("hotRestartOnSave")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
 
         let (os, _) = current_platform();
         let tool = if debug_mode == "flutter" {
@@ -145,17 +191,25 @@ impl zed::Extension for DartExtension {
             "program": program,
             "cwd": cwd.clone().unwrap_or_default(),
             "args": args,
-            "flutterMode": "debug",
+            "toolArgs": tool_args,
+            "env": user_config.get("env").cloned().unwrap_or_else(|| json!({})),
+            "flutterMode": flutter_mode,
             "deviceId": device_id,
             "platform": platform,
-            "stopOnEntry": false
+            "stopOnEntry": false,
+            "evaluateGettersInDebugViews": evaluate_getters,
+            "enableTestRunner": enable_test_runner,
+            "hotReloadOnSave": hot_reload_on_save,
+            "hotRestartOnSave": hot_restart_on_save,
+            "flutterHotReloadOnSave": hot_reload_on_save,
+            "flutterHotRestartOnSave": hot_restart_on_save
         })
         .to_string();
 
         let debug_adapter_binary = DebugAdapterBinary {
             command: Some(command),
             arguments,
-            envs: vec![], // Add any Dart-specific env vars if needed
+            envs: env,
             cwd,
             connection: None,
             request_args: StartDebuggingRequestArguments {
